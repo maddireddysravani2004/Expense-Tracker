@@ -1,0 +1,698 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+from tkcalendar import DateEntry  # Calendar widget for date selection
+from PIL import Image, ImageTk  # For icons
+from ctypes import windll  # For enabling blur effect
+import csv
+import os  # operating system functionalities.
+
+# Enable blur effect for Windows 10+
+try:
+    windll.dwmapi.DwmEnableBlurBehindWindow
+    blur_enabled = True
+except AttributeError:
+    blur_enabled = False
+
+# File to store expenses and budget
+EXPENSE_FILE = "expenses.csv"
+
+# Global variables
+expenses = []
+budget = {"Daily": 0, "Weekly": 0, "Monthly": 0}
+current_language = "English"
+font_size = 12
+
+# Translations dictionary
+translations = {
+    "English": {
+        "title": "Expense Tracker",
+        "add_expense": "Add Expense",
+        "view_expenses": "View Expenses",
+        "edit_expenses": "Edit Expenses",
+        "total_by_category": "Total by Category",
+        "set_budget": "Set Budget",
+        "settings": "Settings",
+        "help": "Help",  # Added "Help" key
+        "exit": "Exit",
+        "amount": "Amount",
+        "date": "Date",
+        "category": "Category",
+        "description": "Description",
+        "save": "Save",
+        "cancel": "Cancel",
+        "change_language": "Change Language:",
+        "zoom_text": "Zoom Text:",
+        "apply_changes": "Apply Changes",
+        "settings_applied": "Settings applied successfully!",
+        "daily": "Daily",
+        "weekly": "Weekly",
+        "monthly": "Monthly",
+        "enter_budget_amount": "Enter Budget Amount:",
+        "budget_set": "Budget Set",
+        "budget_for": "Budget for",
+        "invalid_input": "Invalid Input",
+        "valid_amount": "Please enter a valid positive amount.",
+        "budget_exceeded": "Budget Exceeded",
+        "exceeded_budget": "You have exceeded your {period} budget! Current expenses: ₹{total_expense}, Budget: ₹{budgets[period]}"
+    },
+    "Telugu": {
+        "title": "ఖర్చుల ట్రాకర్",
+        "add_expense": "ఖర్చు జోడించండి",
+        "view_expenses": "ఖర్చులను చూడండి",
+        "edit_expenses": "ఖర్చులను మార్చండి",
+        "total_by_category": "వర్గం ద్వారా మొత్తం",
+        "set_budget": "బడ్జెట్ సెట్ చేయండి",
+        "settings": "సెట్టింగులు",
+        "help": "సహాయం",  # Added "Help" key
+        "exit": "నిష్క్రమించు",
+        "amount": "మొత్తం",
+        "date": "తేదీ",
+        "category": "వర్గం",
+        "description": "వివరణ",
+        "save": "సేవ్ చేయండి",
+        "cancel": "రద్దు చేయండి",
+        "change_language": "భాష మార్చండి:",
+        "zoom_text": "టెక్స్ట్ జూమ్:",
+        "apply_changes": "మార్పులను వర్తించండి",
+        "settings_applied": "సెట్టింగ్లు విజయవంతంగా వర్తించబడ్డాయి!",
+        "daily": "రోజువారీ",
+        "weekly": "వారపు",
+        "monthly": "నెలవారీ",
+        "enter_budget_amount": "బడ్జెట్ మొత్తాన్ని నమోదు చేయండి:",
+        "budget_set": "బడ్జెట్ సెట్ చేయబడింది",
+        "budget_for": "దీని కోసం బడ్జెట్",
+        "invalid_input": "చెల్లని ఇన్పుట్",
+        "valid_amount": "దయచేసి సరైన మొత్తాన్ని నమోదు చేయండి.",
+        "budget_exceeded": "బడ్జెట్ మించబడింది",
+        "exceeded_budget": "మీరు మీ {period} బడ్జెట్‌ను మించిపోయారు! ప్రస్తుత ఖర్చులు: ₹{total_expense}, బడ్జెట్: ₹{budgets[period]}"
+    }
+}
+
+# Function to load existing expenses
+def load_expenses():
+    expenses = []
+    if os.path.exists(EXPENSE_FILE):
+        with open(EXPENSE_FILE, "r") as file:
+            reader = csv.reader(file)
+            for row in reader:
+                try:
+                    expenses.append({"date": row[0], "category": row[1], "amount": float(row[2])})
+                except ValueError:
+                    continue  # Skip invalid rows
+    return expenses
+
+
+
+# Function to center windows
+def center_window(window, width=600, height=400):
+    window.update_idletasks()
+    x = (window.winfo_screenwidth() - width) // 2
+    y = (window.winfo_screenheight() - height) // 2
+    window.geometry(f"{width}x{height}+{x}+{y}")
+    window.grab_set()
+
+
+# Function to save expenses
+def save_expenses():
+    with open(EXPENSE_FILE, "w", newline='') as file:
+        writer = csv.writer(file)
+        for exp in expenses:
+            writer.writerow([exp["date"], exp["category"], exp["amount"]])
+
+
+# Function to update text based on selected language and font size
+def update_text(widget, text_key):
+    widget.config(text=translations[current_language][text_key], font=('Helvetica', font_size))
+
+
+def update_title(window, title_key):
+    window.title(translations[current_language][title_key])
+
+# Function to add expense
+def add_expense():
+    add_window = tk.Toplevel(root)
+    update_title(add_window, "add_expense")
+    center_window(add_window, 500, 300)
+
+    # Create a main frame to hold all widgets
+    main_frame = ttk.Frame(add_window, padding="20")
+    main_frame.pack(fill='both', expand=True)
+
+    def save_new_expense():
+        date = date_entry.get()
+        category = category_combobox.get()
+        amount = amount_entry.get()
+
+        if date and category and amount:
+            try:
+                amount = float(amount)
+                expenses.append({"date": date, "category": category, "amount": amount})
+                save_expenses()
+                messagebox.showinfo("Success", "Expense Added Successfully")
+                add_window.destroy()
+            except ValueError:
+                messagebox.showwarning("Error", "Invalid amount entered!")
+        else:
+            messagebox.showwarning("Error", "All fields are required!")
+
+    # Configure grid weights for consistent spacing
+    main_frame.grid_columnconfigure(1, weight=1)
+
+    # Common width for all entry fields
+    entry_width = 20
+
+    # Labels and Entry fields with consistent sizing
+    tk.Label(main_frame, text="Date:").grid(row=0, column=0, padx=10, pady=10, sticky='e')
+    date_entry = DateEntry(main_frame, width=entry_width, background='darkblue', foreground='white', borderwidth=2)
+    date_entry.grid(row=0, column=1, padx=10, pady=10, sticky='ew')
+
+    tk.Label(main_frame, text="Category:").grid(row=1, column=0, padx=10, pady=10, sticky='e')
+    category_combobox = ttk.Combobox(main_frame, width=entry_width - 3,
+                                     values=["Food", "Transport", "Entertainment", "Bills", "Shopping", "Other"])
+    category_combobox.grid(row=1, column=1, padx=10, pady=10, sticky='ew')
+    category_combobox.current(0)
+
+    tk.Label(main_frame, text="Amount (₹):").grid(row=2, column=0, padx=10, pady=10, sticky='e')
+    amount_entry = ttk.Entry(main_frame, width=entry_width)
+    amount_entry.grid(row=2, column=1, padx=10, pady=10, sticky='ew')
+
+    # Button frame for better alignment
+    button_frame = ttk.Frame(main_frame)
+    button_frame.grid(row=3, column=0, columnspan=2, pady=20)
+    add_button = ttk.Button(button_frame, text="Add Expense", command=save_new_expense)
+    add_button.pack()
+
+
+# function to view expense
+def view_expenses():
+    view_window = tk.Toplevel(root)
+    view_window.title("View Expenses")
+    center_window(view_window, 800, 500)
+
+    # Create main frame
+    main_frame = ttk.Frame(view_window, padding="20")
+    main_frame.pack(fill='both', expand=True)
+
+    # Filter section with custom styling
+    filter_frame = ttk.Frame(main_frame)
+    filter_frame.pack(fill='x', pady=(0, 20))
+
+    filter_label = ttk.Label(
+        filter_frame,
+        text="Filter by Category:",
+        font=('Helvetica', 10, 'bold')
+    )
+    filter_label.pack(side='left', padx=(0, 10))
+
+    category_combobox = ttk.Combobox(
+        filter_frame,
+        values=["All"] + sorted(list(set(exp["category"] for exp in expenses))),
+        width=30,
+        state='readonly'
+    )
+    category_combobox.pack(side='left')
+    category_combobox.current(0)
+
+    # Create treeview instead of listbox for better formatting
+    columns = ('Date', 'Category', 'Amount')
+    tree = ttk.Treeview(main_frame, columns=columns, show='headings', height=15)
+
+    # Configure column headings
+    tree.heading('Date', text='Date')
+    tree.heading('Category', text='Category')
+    tree.heading('Amount', text='Amount (₹)')
+
+    # Configure column widths
+    tree.column('Date', width=150, anchor='center')
+    tree.column('Category', width=150, anchor='center')
+    tree.column('Amount', width=150, anchor='center')
+
+    # Add scrollbar
+    scrollbar = ttk.Scrollbar(main_frame, orient='vertical', command=tree.yview)
+    tree.configure(yscrollcommand=scrollbar.set)
+
+    # Pack the treeview and scrollbar
+    tree.pack(side='left', fill='both', expand=True)
+    scrollbar.pack(side='right', fill='y')
+
+    # Style configuration
+    style = ttk.Style()
+    style.configure("Treeview", font=('Helvetica', 10))
+    style.configure("Treeview.Heading", font=('Helvetica', 10, 'bold'))
+
+    # Summary frame at the bottom
+    summary_frame = ttk.Frame(main_frame)
+    summary_frame.pack(fill='x', pady=(20, 0))
+
+    total_label = ttk.Label(
+        summary_frame,
+        text="Total Amount: ",
+        font=('Helvetica', 10, 'bold')
+    )
+    total_label.pack(side='left')
+
+    amount_label = ttk.Label(
+        summary_frame,
+        text="₹0.00",
+        font=('Helvetica', 10)
+    )
+    amount_label.pack(side='left')
+    def filter_expenses():
+        # Clear existing items
+        for item in tree.get_children():
+            tree.delete(item)
+
+        selected_category = category_combobox.get()
+        total_amount = 0
+
+        # Sort expenses by date
+        filtered_expenses = sorted(
+            [exp for exp in expenses if selected_category == "All" or exp["category"] == selected_category],
+            key=lambda x: x['date']
+        )
+
+        # Add items to treeview with alternating colors
+        for i, exp in enumerate(filtered_expenses):
+            # Calculate total
+            total_amount += exp['amount']
+
+            # Insert with tags for alternating colors
+            tag = 'evenrow' if i % 2 == 0 else 'oddrow'
+            tree.insert('', 'end', values=(
+                exp['date'],
+                exp['category'],
+                f"₹{exp['amount']:,.2f}"
+            ), tags=(tag,))
+
+        # Update total amount
+        amount_label.config(text=f"₹{total_amount:,.2f}")
+
+        # Configure tag colors for alternating rows
+        tree.tag_configure('evenrow', background='#f0f0f0')
+        tree.tag_configure('oddrow', background='#ffffff')
+
+    # Bind the filter function
+    category_combobox.bind("<<ComboboxSelected>>", lambda event: filter_expenses())
+
+    # Initial population of expenses
+    filter_expenses()
+
+
+# function to edit expense
+def edit_expenses():
+    edit_window = tk.Toplevel(root)
+    edit_window.title("Edit Expenses")
+    center_window(edit_window, 800, 500)
+
+    main_frame = ttk.Frame(edit_window, padding="20")
+    main_frame.pack(fill='both', expand=True)
+
+    # Filter section
+    filter_frame = ttk.Frame(main_frame)
+    filter_frame.pack(fill='x', pady=(0, 20))
+
+    filter_label = ttk.Label(
+        filter_frame,
+        text="Filter by Category:",
+        font=('Helvetica', 10, 'bold')
+    )
+    filter_label.pack(side='left', padx=(0, 10))
+
+    category_combobox = ttk.Combobox(
+        filter_frame,
+        values=["All"] + sorted(list(set(exp["category"] for exp in expenses))),
+        width=30,
+        state='readonly'
+    )
+    category_combobox.pack(side='left')
+    category_combobox.current(0)
+
+    # Create treeview
+    columns = ('Date', 'Category', 'Amount', 'Index')  # Added Index column
+    tree = ttk.Treeview(main_frame, columns=columns, show='headings', height=15)
+
+    # Configure visible columns
+    for col in columns[:-1]:  # Don't show the Index column
+        tree.heading(col, text=col)
+        tree.column(col, width=150, anchor='center')
+
+    # Hide the Index column
+    tree.column('Index', width=0, stretch=False)
+
+    # Add scrollbar
+    scrollbar = ttk.Scrollbar(main_frame, orient='vertical', command=tree.yview)
+    tree.configure(yscrollcommand=scrollbar.set)
+
+    tree.pack(side='left', fill='both', expand=True)
+    scrollbar.pack(side='right', fill='y')
+
+    def delete_selected():
+        selected_item = tree.selection()
+        if not selected_item:
+            messagebox.showwarning("Warning", "Please select an expense to delete!")
+            return
+
+        # Get the actual index from the hidden column
+        selected_idx = int(tree.item(selected_item)['values'][-1])
+
+        if messagebox.askyesno("Confirm Delete", "Are you sure you want to delete this expense?"):
+            expenses.pop(selected_idx)
+            save_expenses()
+            filter_expenses()
+            messagebox.showinfo("Success", "Expense deleted successfully!")
+
+    # Buttons frame
+    button_frame = ttk.Frame(main_frame)
+    button_frame.pack(fill='x', pady=(20, 0))
+
+    # Delete button
+    delete_btn = tk.Button(button_frame, text="Delete Expense", command=delete_selected, bg="black", fg="white",
+                             font=('Helvetica', 10, 'bold'), width=15, height=1)
+    delete_btn.pack(side='left', padx=5)
+
+    def filter_expenses():
+        for item in tree.get_children():
+            tree.delete(item)
+
+        selected_category = category_combobox.get()
+
+        for idx, exp in enumerate(expenses):
+            if selected_category == "All" or exp["category"] == selected_category:
+                tree.insert('', 'end', values=(
+                    exp['date'],
+                    exp['category'],
+                    f"₹{exp['amount']:,.2f}",
+                    idx  # Store the actual index in a hidden column
+                ), tags=('evenrow' if idx % 2 == 0 else 'oddrow',))
+
+        # Configure tag colors for alternating rows
+        tree.tag_configure('evenrow', background='#f0f0f0')
+        tree.tag_configure('oddrow', background='#ffffff')
+
+    # Bind the filter function
+    category_combobox.bind("<<ComboboxSelected>>", lambda event: filter_expenses())
+
+    # Initial population of expenses
+    filter_expenses()
+
+# function for total by category
+def total_by_category():
+    total_window = tk.Toplevel(root)
+    total_window.title("Total Expenses by Category")
+    center_window(total_window, 500, 400)
+
+    # Create main frame
+    main_frame = ttk.Frame(total_window, padding="20")
+    main_frame.pack(fill='both', expand=True)
+
+    # Create treeview
+    columns = ('Category', 'Total Amount', 'Percentage')
+    tree = ttk.Treeview(main_frame, columns=columns, show='headings', height=10)
+
+    # Configure columns
+    tree.heading('Category', text='Category')
+    tree.heading('Total Amount', text='Total Amount')
+    tree.heading('Percentage', text='% of Total')
+
+    tree.column('Category', width=150, anchor='center')
+    tree.column('Total Amount', width=150, anchor='center')
+    tree.column('Percentage', width=100, anchor='center')
+
+    # Add scrollbar
+    scrollbar = ttk.Scrollbar(main_frame, orient='vertical', command=tree.yview)
+    tree.configure(yscrollcommand=scrollbar.set)
+
+    tree.pack(side='left', fill='both', expand=True)
+    scrollbar.pack(side='right', fill='y')
+
+    # Calculate totals
+    category_totals = {}
+    grand_total = 0
+
+    for expense in expenses:
+        category = expense['category']
+        amount = expense['amount']
+        category_totals[category] = category_totals.get(category, 0) + amount
+        grand_total += amount
+
+    # Summary frame
+    summary_frame = ttk.Frame(total_window, padding="10")
+    summary_frame.pack(fill='x', pady=(10, 0))
+
+    # Display totals in treeview
+    for i, (category, total) in enumerate(sorted(category_totals.items())):
+        percentage = (total / grand_total * 100) if grand_total > 0 else 0
+        tree.insert('', 'end', values=(
+            category,
+            f"₹{total:,.2f}",
+            f"{percentage:.1f}%"
+        ), tags=('evenrow' if i % 2 == 0 else 'oddrow',))
+
+    # Add grand total
+    total_label = ttk.Label(
+        summary_frame,
+        text=f"Grand Total: ₹{grand_total:,.2f}",
+        font=('Helvetica', 12, 'bold')
+    )
+    total_label.pack(side='right', padx=10)
+
+    # Configure tag colors for alternating rows
+    tree.tag_configure('evenrow', background='#f0f0f0')
+    tree.tag_configure('oddrow', background='#ffffff')
+
+    # Add a title label
+    title_label = ttk.Label(
+        total_window,
+        text="Expense Summary by Category",
+        font=('Helvetica', 14, 'bold')
+    )
+    title_label.pack(side='top', pady=(10, 0))
+   
+# Function for settings (language change and text zoom)
+def settings():
+    settings_window = tk.Toplevel(root)
+    update_title(settings_window, "settings")
+    center_window(settings_window, 500, 300)
+
+    def apply_settings():
+        global current_language, font_size
+        current_language = language_choice.get()
+        font_size = int(zoom_choice.get())
+        update_ui()
+        messagebox.showinfo(translations[current_language]["title"], translations[current_language]["settings_applied"])
+
+    # Language selection
+    language_label = tk.Label(settings_window, text=translations[current_language]["change_language"])
+    language_label.pack(pady=5)
+    language_choice = ttk.Combobox(settings_window, values=list(translations.keys()), state='readonly')
+    language_choice.set(current_language)
+    language_choice.pack(pady=5)
+
+    # Text zoom
+    zoom_label = tk.Label(settings_window, text=translations[current_language]["zoom_text"])
+    zoom_label.pack(pady=5)
+    zoom_choice = ttk.Combobox(settings_window, values=[10, 12, 14, 16], state='readonly')
+    zoom_choice.set(font_size)
+    zoom_choice.pack(pady=5)
+
+    # Apply changes button
+    apply_button = tk.Button(settings_window, text=translations[current_language]["apply_changes"], command=apply_settings)
+    apply_button.pack(pady=10)
+
+
+def help():
+    """Show help information about the expense tracker"""
+    help_window = tk.Toplevel(root)
+    update_title(help_window, "help")
+    help_window.geometry("700x500")
+    center_window(help_window, 700, 500)
+    
+    # Create a scrollable text area
+    help_frame = tk.Frame(help_window)
+    help_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+    
+    scrollbar = tk.Scrollbar(help_frame)
+    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+    
+    help_text = tk.Text(help_frame, wrap=tk.WORD, yscrollcommand=scrollbar.set, padx=10, pady=10)
+    help_text.pack(fill=tk.BOTH, expand=True)
+    
+    scrollbar.config(command=help_text.yview)
+    
+    # Help content
+    help_content = """
+EXPENSE TRACKER - USER GUIDE
+
+What is an Expense Tracker?
+---------------------------
+The Expense Tracker is a personal finance tool designed to help you monitor and manage your spending habits. By tracking your expenses, you can gain insight into where your money goes and make informed financial decisions.
+
+Why Use an Expense Tracker?
+---------------------------
+- Financial Awareness: Get clear visibility of your spending patterns
+- Budget Management: Stay within your budget limits by monitoring expenses
+- Financial Goals: Track progress toward saving and spending goals
+- Expense Reduction: Identify areas where you can cut unnecessary spending
+- Financial Planning: Make better financial decisions based on actual data
+- Tax Preparation: Keep organized records for tax purposes
+
+Main Features
+------------
+1. Add Expenses
+   • Record transactions with date, amount, category, and description
+   • Add receipts or images of invoices for better record-keeping
+
+2. Categories Management
+   • Organize expenses into customizable categories
+   • View spending distribution across different categories
+
+3. Reports
+   • Generate visual reports of your spending habits
+   • View daily, weekly, monthly, or yearly expense summaries
+   • Export data for external analysis
+
+4. Settings
+   • Language Options: Change the application language
+   • Text Zoom: Adjust text size for better readability
+   • Customize categories and budget limits
+
+Getting Started
+--------------
+1. Add your first expense by clicking the "Add Expense" button
+2. Select or create a category for the expense
+3. Enter the amount, date, and a brief description
+4. View your expenses in the main dashboard
+5. Generate reports to analyze your spending patterns
+
+Tips for Effective Expense Tracking
+----------------------------------
+- Record expenses immediately to ensure accuracy
+- Use specific categories that make sense for your lifestyle
+- Review your expenses weekly to stay on track
+- Set realistic budget goals based on your income
+- Use the reports feature to identify spending trends
+
+Privacy and Security
+-------------------
+- Your financial data is stored locally on your device
+- No personal information is shared with external servers
+- Consider setting up regular backups of your expense data
+
+Need Further Assistance?
+-----------------------
+If you have questions or encounter issues while using the Expense Tracker, please contact our support team or refer to the online documentation for additional guidance.
+    """
+    
+    help_text.insert(tk.END, help_content)
+    help_text.config(state=tk.DISABLED)  # Make text read-only
+    
+    # Close button
+    close_button = ttk.Button(help_window, text="Close", command=help_window.destroy)
+    close_button.pack(pady=10)
+    
+    # Make window modal
+    help_window.transient(root)
+    help_window.grab_set()
+    root.wait_window(help_window)
+
+
+def exit_app():
+    if messagebox.askokcancel("Expense Tracker", "Do you want to exit?"):
+        root.destroy()
+
+# Function to update UI based on language and font size
+def update_ui():
+    update_title(root, "title")
+    update_text(add_expense_button, "add_expense")
+    update_text(view_expenses_button, "view_expenses")
+    update_text(edit_expenses_button, "edit_expenses")
+    update_text(total_by_category_button, "total_by_category")
+    update_text(settings_button, "settings")
+    update_text(help_button, "help")  
+    update_text(exit_button, "exit")
+
+
+# Load expenses and budget
+expenses = load_expenses()
+
+
+# Create main window
+root = tk.Tk()
+root.title("Expense Tracker")
+root.geometry("800x500")
+root.eval('tk::PlaceWindow . center')
+
+# Load icons
+icon_size = (50, 50)  # Adjust as needed
+
+# Function to load image and handle potential file not found errors
+def load_icon(filename):
+    try:
+        image = Image.open(filename).resize(icon_size)
+        return ImageTk.PhotoImage(image)
+    except FileNotFoundError:
+        print(f"Error: Icon file '{filename}' not found. Using a placeholder.")
+        # Create a placeholder image
+        placeholder_image = Image.new("RGB", icon_size, "gray")
+        return ImageTk.PhotoImage(placeholder_image)
+
+add_icon = load_icon("C:\\Users\\jeeva\\OneDrive\\Documents\\Expense Tracker\\add_icon.png")
+view_icon = load_icon("C:\\Users\\jeeva\\OneDrive\\Documents\\Expense Tracker\\view_icon.png")
+edit_icon = load_icon("C:\\Users\\jeeva\\OneDrive\\Documents\\Expense Tracker\\edit_icon.png")
+total_icon = load_icon("C:\\Users\\jeeva\\OneDrive\\Documents\\Expense Tracker\\total_icon.png")
+settings_icon = load_icon("C:\\Users\\jeeva\\OneDrive\\Documents\\Expense Tracker\\settings_icon.png")
+help_icon = load_icon("C:\\Users\\jeeva\\OneDrive\\Documents\\Expense Tracker\\help_icon.png")  # Load help icon
+exit_icon = load_icon("C:\\Users\\jeeva\\OneDrive\\Documents\\Expense Tracker\\exit_icon.png")
+
+
+# Create a frame to hold the buttons
+button_frame = ttk.Frame(root, padding="20")
+button_frame.pack(expand=True, fill='both')
+
+# Configure grid layout
+button_frame.grid_columnconfigure(0, weight=1, uniform="group1")
+button_frame.grid_columnconfigure(1, weight=1, uniform="group1")
+button_frame.grid_columnconfigure(2, weight=1, uniform="group1")
+button_frame.grid_columnconfigure(3, weight=1, uniform="group1")
+
+# Add Expense Button
+add_expense_button = tk.Button(button_frame, image=add_icon, compound=tk.TOP, command=add_expense)
+add_expense_button.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+
+# View Expenses Button
+view_expenses_button = tk.Button(button_frame, image=view_icon, compound=tk.TOP, command=view_expenses)
+view_expenses_button.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
+
+# Edit Expenses Button
+edit_expenses_button = tk.Button(button_frame, image=edit_icon, compound=tk.TOP, command=edit_expenses)
+edit_expenses_button.grid(row=0, column=2, padx=10, pady=10, sticky="nsew")
+
+# Total by Category Button
+total_by_category_button = tk.Button(button_frame, image=total_icon, compound=tk.TOP, command=total_by_category)
+total_by_category_button.grid(row=0, column=3, padx=10, pady=10, sticky="nsew")
+
+# Settings Button
+settings_button = tk.Button(button_frame, image=settings_icon, compound=tk.TOP, command=settings)
+settings_button.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
+
+# Help Button
+help_button = tk.Button(button_frame, image=help_icon, compound=tk.TOP, command=help)
+help_button.grid(row=1, column=1, padx=10, pady=10, sticky="nsew")
+
+# Exit Button
+exit_button = tk.Button(button_frame, image=exit_icon, compound=tk.TOP, command=exit_app)
+exit_button.grid(row=1, column=2, padx=10, pady=10, sticky="nsew")
+
+# Initial UI update
+update_ui()
+
+root.mainloop()
+
+
+
+
+
+
+
+
+---------------------------------------------------------------
